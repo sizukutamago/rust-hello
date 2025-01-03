@@ -11,6 +11,13 @@ pub struct ThreadPool {
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
 impl ThreadPool {
+    /// Create a new ThreadPool.
+    ///
+    /// The size is the number of threads in the pool.
+    ///
+    /// # Panics
+    ///
+    /// The `new` function will panic if the size is zero.
     pub fn new(size: usize) -> ThreadPool {
         assert!(size > 0);
 
@@ -36,6 +43,20 @@ impl ThreadPool {
     {
         let job = Box::new(f);
         self.sender.as_ref().unwrap().send(job).unwrap();
+    }
+}
+
+impl Drop for ThreadPool {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+
+        for worker in &mut self.workers {
+            println!("Shutting down worker {}", worker.id);
+
+            if let Some(thread) = worker.thread.take() {
+                thread.join().unwrap();
+            }
+        }
     }
 }
 
@@ -65,20 +86,6 @@ impl Worker {
         Worker {
             id,
             thread: Some(thread),
-        }
-    }
-}
-
-impl Drop for ThreadPool {
-    fn drop(&mut self) {
-        drop(self.sender.take());
-
-        for worker in &mut self.workers {
-            println!("Shutting down worker {}", worker.id);
-
-            if let Some(thread) = worker.thread.take() {
-                thread.join().unwrap();
-            }
         }
     }
 }
